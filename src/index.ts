@@ -156,12 +156,16 @@ export class BatchCollector<T = unknown> {
       return null;
     }
 
-    if (this.storageType === "localStorage") {
-      return window.localStorage;
-    }
+    try {
+      if (this.storageType === "localStorage") {
+        return window.localStorage;
+      }
 
-    if (this.storageType === "sessionStorage") {
-      return window.sessionStorage;
+      if (this.storageType === "sessionStorage") {
+        return window.sessionStorage;
+      }
+    } catch {
+      return null;
     }
 
     return null;

@@ -209,6 +209,34 @@ describe("BatchCollector", () => {
     expect(collector.items()).toEqual([]);
   });
 
+  it("falls back gracefully when storage access throws", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("blocked");
+      }
+    });
+
+    try {
+      const collector = new BatchCollector<number>({
+        delayMs: 100,
+        storageType: "localStorage"
+      });
+
+      collector.push(1);
+      vi.advanceTimersByTime(100);
+
+      expect(collector.items()).toEqual([]);
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(window, "localStorage", descriptor);
+      }
+    }
+  });
+
+
   it("continues notifying listeners when one listener throws", () => {
     const received: number[][] = [];
     const collector = new BatchCollector<number>({ delayMs: 100 });
