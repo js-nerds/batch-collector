@@ -124,6 +124,104 @@ describe("BatchCollector", () => {
     expect(second.items()).toEqual([]);
   });
 
+
+  it("claims persisted localStorage batch before async replay", () => {
+    const key = "batch-test-claim";
+
+    const first = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: key
+    });
+
+    first.push({ id: 1 });
+
+    const receivedSecond: { id: number }[][] = [];
+    const second = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: key
+    });
+
+    second.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      receivedSecond.push(items);
+    });
+
+    const receivedThird: { id: number }[][] = [];
+    const third = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: key
+    });
+
+    third.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      receivedThird.push(items);
+    });
+
+    vi.runOnlyPendingTimers();
+
+    expect(receivedSecond).toEqual([[{ id: 1 }]]);
+    expect(receivedThird).toEqual([]);
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
+  it("keeps persisted localStorage recovery when autoClear is false", () => {
+    const key = "batch-test-autoclear-false";
+
+    const first = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: key,
+      autoClear: false
+    });
+
+    first.push({ id: 1 });
+
+    const received: { id: number }[][] = [];
+    const second = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: key,
+      autoClear: false
+    });
+
+    second.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      received.push(items);
+    });
+
+    vi.runOnlyPendingTimers();
+
+    expect(received).toEqual([[{ id: 1 }]]);
+    expect(localStorage.getItem(key)).toBe(JSON.stringify([{ id: 1 }]));
+    expect(second.items()).toEqual([{ id: 1 }]);
+
+    second.clear();
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
+
+  it("treats non-array persisted value as empty batch", () => {
+    localStorage.setItem("batch-invalid-shape", JSON.stringify({ id: 1 }));
+
+    const collector = new BatchCollector<number>({
+      delayMs: 100,
+      storageType: "localStorage",
+      storageKey: "batch-invalid-shape"
+    });
+
+    const received: number[][] = [];
+
+    collector.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      received.push(items);
+    });
+
+    vi.runOnlyPendingTimers();
+
+    expect(received).toEqual([]);
+    expect(collector.items()).toEqual([]);
+    expect(localStorage.getItem("batch-invalid-shape")).toBe(JSON.stringify({ id: 1 }));
+  });
+
   it("clear removes pending items and persisted buffer", () => {
     const collector = new BatchCollector<number>({
       delayMs: 100,
@@ -161,4 +259,24 @@ describe("BatchCollector", () => {
     collector.clear();
     expect(collector.items()).toEqual([]);
   });
+  it("continues notifying listeners when one listener throws", () => {
+    const received: number[][] = [];
+    const collector = new BatchCollector<number>({ delayMs: 100 });
+
+    collector.subscribe(BATCH_FLUSH_EVENT, () => {
+      throw new Error("listener failed");
+    });
+
+    collector.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      received.push(items);
+    });
+
+    collector.push(1);
+    collector.push(2);
+
+    expect(() => vi.advanceTimersByTime(100)).not.toThrow();
+    expect(received).toEqual([[1, 2]]);
+    expect(collector.items()).toEqual([]);
+  });
+
 });

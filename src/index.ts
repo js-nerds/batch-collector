@@ -80,7 +80,7 @@ export class BatchCollector<T = unknown> {
     this.autoClear = config.autoClear ?? true;
 
     if (this.storageType !== "memory") {
-      const pending = this.readPersisted();
+      const pending = this.autoClear ? this.claimPersisted() : this.readPersisted();
 
       if (pending.length !== 0) {
         this.buffer = pending;
@@ -183,10 +183,32 @@ export class BatchCollector<T = unknown> {
     try {
       const raw = storage.getItem(this.storageKey);
 
-      return raw ? (JSON.parse(raw) as T[]) : [];
+      if (!raw) {
+        return [];
+      }
+
+      const parsed: unknown = JSON.parse(raw);
+
+      return Array.isArray(parsed) ? (parsed as T[]) : [];
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Reads and clears persisted items in a single synchronous claim operation.
+   * Used for autoClear mode to prevent multiple instances from replaying the same persisted batch.
+   *
+   * @returns {T[]} Claimed persisted items, or empty array when none are available.
+   */
+  private claimPersisted(): T[] {
+    const pending = this.readPersisted();
+
+    if (pending.length !== 0) {
+      this.writePersisted([]);
+    }
+
+    return pending;
   }
 
   /**
@@ -252,7 +274,13 @@ export class BatchCollector<T = unknown> {
    * @returns {void}
    */
   private emit(event: string, payload: T[]): void {
-    this.listeners.get(event)?.forEach((cb) => cb(payload));
+    this.listeners.get(event)?.forEach((cb) => {
+      try {
+        cb(payload);
+      } catch {
+        // Keep notifying remaining listeners when one subscriber throws.
+      }
+    });
   }
 
   /**
