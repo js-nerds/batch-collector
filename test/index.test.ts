@@ -88,7 +88,39 @@ describe("BatchCollector", () => {
       storageKey: "batch-test"
     });
 
+    vi.runOnlyPendingTimers();
+
     expect(localStorage.getItem("batch-test")).toBeNull();
+    expect(second.items()).toEqual([]);
+  });
+
+  it("re-flushes persisted localStorage batch to listeners on next instance creation", () => {
+    const key = "batch-test-reflush";
+
+    const first = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: key
+    });
+
+    first.push({ id: 1 });
+    first.push({ id: 2 });
+
+    const received: { id: number }[][] = [];
+    const second = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: key
+    });
+
+    second.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      received.push(items);
+    });
+
+    vi.runOnlyPendingTimers();
+
+    expect(received).toEqual([[{ id: 1 }, { id: 2 }]]);
+    expect(localStorage.getItem(key)).toBeNull();
     expect(second.items()).toEqual([]);
   });
 

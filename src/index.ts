@@ -83,8 +83,8 @@ export class BatchCollector<T = unknown> {
       const pending = this.readPersisted();
 
       if (pending.length !== 0) {
-        this.writePersisted([]);
-        this.emit(BATCH_FLUSH_EVENT, pending);
+        this.buffer = pending;
+        this.timerId = setTimeout(() => this.flush(this.autoClear), 0);
       }
     }
   }
