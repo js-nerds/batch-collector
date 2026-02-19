@@ -92,6 +92,20 @@ describe("BatchCollector", () => {
     expect(second.items()).toEqual([]);
   });
 
+
+  it("treats non-array persisted value as empty batch", () => {
+    localStorage.setItem("batch-invalid-shape", JSON.stringify({ id: 1 }));
+
+    const collector = new BatchCollector<number>({
+      delayMs: 100,
+      storageType: "localStorage",
+      storageKey: "batch-invalid-shape"
+    });
+
+    expect(collector.items()).toEqual([]);
+    expect(localStorage.getItem("batch-invalid-shape")).toEqual(JSON.stringify({ id: 1 }));
+  });
+
   it("clear removes pending items and persisted buffer", () => {
     const collector = new BatchCollector<number>({
       delayMs: 100,

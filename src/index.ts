@@ -183,7 +183,13 @@ export class BatchCollector<T = unknown> {
     try {
       const raw = storage.getItem(this.storageKey);
 
-      return raw ? (JSON.parse(raw) as T[]) : [];
+      if (!raw) {
+        return [];
+      }
+
+      const parsed: unknown = JSON.parse(raw);
+
+      return Array.isArray(parsed) ? (parsed as T[]) : [];
     } catch {
       return [];
     }
