@@ -129,4 +129,24 @@ describe("BatchCollector", () => {
     collector.clear();
     expect(collector.items()).toEqual([]);
   });
+
+  it("continues notifying listeners when one listener throws", () => {
+    const received: number[][] = [];
+    const collector = new BatchCollector<number>({ delayMs: 100 });
+
+    collector.subscribe(BATCH_FLUSH_EVENT, () => {
+      throw new Error("listener failed");
+    });
+
+    collector.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      received.push(items);
+    });
+
+    collector.push(1);
+    collector.push(2);
+    expect(() => vi.advanceTimersByTime(100)).not.toThrow();
+
+    expect(received).toEqual([[1, 2]]);
+    expect(collector.items()).toEqual([]);
+  });
 });

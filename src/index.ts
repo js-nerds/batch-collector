@@ -252,7 +252,13 @@ export class BatchCollector<T = unknown> {
    * @returns {void}
    */
   private emit(event: string, payload: T[]): void {
-    this.listeners.get(event)?.forEach((cb) => cb(payload));
+    this.listeners.get(event)?.forEach((cb) => {
+      try {
+        cb(payload);
+      } catch {
+        // ignore listener errors to keep emit/flush cycle stable
+      }
+    });
   }
 
   /**
