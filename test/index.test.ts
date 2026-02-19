@@ -124,6 +124,47 @@ describe("BatchCollector", () => {
     expect(second.items()).toEqual([]);
   });
 
+
+  it("claims persisted localStorage batch before async replay", () => {
+    const key = "batch-test-claim";
+
+    const first = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: key
+    });
+
+    first.push({ id: 1 });
+
+    const receivedSecond: { id: number }[][] = [];
+    const second = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: key
+    });
+
+    second.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      receivedSecond.push(items);
+    });
+
+    const receivedThird: { id: number }[][] = [];
+    const third = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: key
+    });
+
+    third.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      receivedThird.push(items);
+    });
+
+    vi.runOnlyPendingTimers();
+
+    expect(receivedSecond).toEqual([[{ id: 1 }]]);
+    expect(receivedThird).toEqual([]);
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
   it("clear removes pending items and persisted buffer", () => {
     const collector = new BatchCollector<number>({
       delayMs: 100,
