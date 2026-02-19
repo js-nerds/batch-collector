@@ -80,7 +80,7 @@ export class BatchCollector<T = unknown> {
     this.autoClear = config.autoClear ?? true;
 
     if (this.storageType !== "memory") {
-      const pending = this.claimPersisted();
+      const pending = this.autoClear ? this.claimPersisted() : this.readPersisted();
 
       if (pending.length !== 0) {
         this.buffer = pending;
@@ -191,7 +191,7 @@ export class BatchCollector<T = unknown> {
 
   /**
    * Reads and clears persisted items in a single synchronous claim operation.
-   * This prevents multiple instances from replaying the same persisted batch.
+   * Used for autoClear mode to prevent multiple instances from replaying the same persisted batch.
    *
    * @returns {T[]} Claimed persisted items, or empty array when none are available.
    */

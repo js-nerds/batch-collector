@@ -165,6 +165,40 @@ describe("BatchCollector", () => {
     expect(localStorage.getItem(key)).toBeNull();
   });
 
+  it("keeps persisted localStorage recovery when autoClear is false", () => {
+    const key = "batch-test-autoclear-false";
+
+    const first = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: key,
+      autoClear: false
+    });
+
+    first.push({ id: 1 });
+
+    const received: { id: number }[][] = [];
+    const second = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: key,
+      autoClear: false
+    });
+
+    second.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      received.push(items);
+    });
+
+    vi.runOnlyPendingTimers();
+
+    expect(received).toEqual([[{ id: 1 }]]);
+    expect(localStorage.getItem(key)).toBe(JSON.stringify([{ id: 1 }]));
+    expect(second.items()).toEqual([{ id: 1 }]);
+
+    second.clear();
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
   it("clear removes pending items and persisted buffer", () => {
     const collector = new BatchCollector<number>({
       delayMs: 100,
