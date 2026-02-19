@@ -72,7 +72,7 @@ describe("BatchCollector", () => {
     expect(received).toEqual([["a", "b"]]);
   });
 
-  it("drains persisted localStorage batch on next instance creation", () => {
+  it("replays persisted localStorage batch asynchronously on next instance", () => {
     const first = new BatchCollector<{ id: number }>({
       delayMs: 1000,
       storageType: "localStorage",
@@ -82,16 +82,81 @@ describe("BatchCollector", () => {
     first.push({ id: 1 });
     first.push({ id: 2 });
 
+    const received: Array<Array<{ id: number }>> = [];
     const second = new BatchCollector<{ id: number }>({
       delayMs: 1000,
       storageType: "localStorage",
       storageKey: "batch-test"
     });
 
+    second.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      received.push(items);
+    });
+
     expect(localStorage.getItem("batch-test")).toBeNull();
-    expect(second.items()).toEqual([]);
+    expect(received).toEqual([]);
+
+    vi.advanceTimersByTime(0);
+    expect(received).toEqual([[{ id: 1 }, { id: 2 }]]);
   });
 
+  it("claims persisted batch before async replay to avoid duplicate recovery", () => {
+    localStorage.setItem("batch-race", JSON.stringify([{ id: 1 }]));
+
+    const firstReceived: Array<Array<{ id: number }>> = [];
+    const secondReceived: Array<Array<{ id: number }>> = [];
+
+    const first = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: "batch-race"
+    });
+
+    first.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      firstReceived.push(items);
+    });
+
+    const second = new BatchCollector<{ id: number }>({
+      delayMs: 1000,
+      storageType: "localStorage",
+      storageKey: "batch-race"
+    });
+
+    second.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      secondReceived.push(items);
+    });
+
+    expect(localStorage.getItem("batch-race")).toBeNull();
+
+    vi.advanceTimersByTime(0);
+
+    expect(firstReceived.length + secondReceived.length).toBe(1);
+    expect(firstReceived[0] ?? secondReceived[0]).toEqual([{ id: 1 }]);
+  });
+
+  it("does not auto-clear persisted batch during recovery when autoClear is false", () => {
+    localStorage.setItem("batch-manual-recovery", JSON.stringify([10, 20]));
+
+    const received: number[][] = [];
+    const collector = new BatchCollector<number>({
+      delayMs: 100,
+      storageType: "localStorage",
+      storageKey: "batch-manual-recovery",
+      autoClear: false
+    });
+
+    collector.subscribe(BATCH_FLUSH_EVENT, (items) => {
+      received.push(items);
+    });
+
+    vi.advanceTimersByTime(0);
+
+    expect(received).toEqual([[10, 20]]);
+    expect(localStorage.getItem("batch-manual-recovery")).toEqual(JSON.stringify([10, 20]));
+
+    collector.clear();
+    expect(localStorage.getItem("batch-manual-recovery")).toBeNull();
+  });
 
   it("treats non-array persisted value as empty batch", () => {
     localStorage.setItem("batch-invalid-shape", JSON.stringify({ id: 1 }));

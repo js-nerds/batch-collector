@@ -80,11 +80,10 @@ export class BatchCollector<T = unknown> {
     this.autoClear = config.autoClear ?? true;
 
     if (this.storageType !== "memory") {
-      const pending = this.readPersisted();
+      const pending = this.autoClear ? this.claimPersisted() : this.readPersisted();
 
       if (pending.length !== 0) {
-        this.writePersisted([]);
-        this.emit(BATCH_FLUSH_EVENT, pending);
+        setTimeout(() => this.emit(BATCH_FLUSH_EVENT, pending), 0);
       }
     }
   }
@@ -193,6 +192,22 @@ export class BatchCollector<T = unknown> {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Reads and clears persisted batch atomically in the same tick.
+   * Used for recovery when autoClear=true to avoid duplicate replays across parallel instances.
+   *
+   * @returns {T[]} Claimed items or empty array when unavailable.
+   */
+  private claimPersisted(): T[] {
+    const items = this.readPersisted();
+
+    if (items.length !== 0) {
+      this.writePersisted([]);
+    }
+
+    return items;
   }
 
   /**
